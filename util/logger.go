@@ -25,5 +25,4 @@ func InitLog(logLevel string) {
 		Timestamp().
 		Caller().
 		Logger()
-
 }

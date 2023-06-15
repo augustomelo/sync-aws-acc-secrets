@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"regexp"
 
@@ -14,35 +13,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
 
-type Options struct {
-	CredentialsFile string
-	LogLevel        string
-	Match           regexp.Regexp
-	Region          string
-	Source          string
-	SyncOperation   SyncOperation
-	Target          string
-}
-
 type Report struct {
 	Created  []string
 	Replaced []string
 	Skipped  []string
 }
 
-type SyncOperation string
-
-const (
-	Create        SyncOperation = "c"
-	Replace       SyncOperation = "r"
-	CreateReplace SyncOperation = "cr"
-)
-
-var SyncOperations = map[string]SyncOperation{
-	"c":  Create,
-	"r":  Replace,
-	"cr": CreateReplace,
-}
 
 // usage example
 // syn-aws-acc-secrets --source=source-profile --target=profile1 --match=regex --region=eu-central-1 --credentialsFile=/location --syncOperation=cr
@@ -53,7 +29,7 @@ func main() {
 	// 1. Better desciption on the secret it should be something like: Created by sync-aws-acc-secrets version: 12313, secret ref: arn
 	// 2. Use context to geep the connections
 
-	options := InitOptions()
+	options := util.InitOptions()
 	sourceCfg := LoadConfig(options.Source, options)
 	targetCfg := LoadConfig(options.Target, options)
 	secretsARNs := RetrieveSecretsARNs(sourceCfg, options.Match)
@@ -69,7 +45,7 @@ func DisplayReport(report Report) {
 	util.Logger.Info().Strs("skipped", report.Skipped).Send()
 }
 
-func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutput, syncOperation SyncOperation) Report {
+func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutput, syncOperation util.SyncOperation) Report {
 	conn := secretsmanager.NewFromConfig(config)
 	report := Report{
 		Created:  make([]string, 0),
@@ -82,7 +58,7 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 
 		secretARN := SecretExistsOnTarget(conn, secret.Name)
 
-		if (syncOperation == Create || syncOperation == CreateReplace) && secretARN == "" {
+		if (syncOperation == util.Create || syncOperation == util.CreateReplace) && secretARN == "" {
 			result, err := conn.CreateSecret(context.TODO(), &secretsmanager.CreateSecretInput{
 				Name:         secret.Name,
 				Description:  aws.String(fmt.Sprintf("Ref: %s", *secret.ARN)),
@@ -95,7 +71,7 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 
 			util.Logger.Debug().Msgf("Created secret, new ARN: `%s`", *result.ARN)
 			report.Created = append(report.Created, *secret.ARN)
-		} else if (syncOperation == Replace || syncOperation == CreateReplace) && secretARN != "" {
+		} else if (syncOperation == util.Replace || syncOperation == util.CreateReplace) && secretARN != "" {
 			result, err := conn.UpdateSecret(context.TODO(), &secretsmanager.UpdateSecretInput{
 				SecretId:     &secretARN,
 				Description:  aws.String(fmt.Sprintf("Ref: %s", *secret.ARN)),
@@ -202,7 +178,7 @@ func RetrieveSecretsARNs(config aws.Config, match regexp.Regexp) []string {
 	return secretsARNs
 }
 
-func LoadConfig(profile string, options Options) aws.Config {
+func LoadConfig(profile string, options util.Options) aws.Config {
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithSharedConfigProfile(profile),
 		config.WithRegion(options.Region),
@@ -214,46 +190,4 @@ func LoadConfig(profile string, options Options) aws.Config {
 	}
 
 	return cfg
-}
-
-func InitOptions() Options {
-	credentialsFile := flag.String("credentialsFile", "", "Credentials file locaiton, if no value is provided it will search on aws default location")
-	logLevel := flag.String("logLevel", "info", "Log level, possible values: trace, debug, info, warn, error, panic and disabled")
-	match := flag.String("match", "", "Regex that will be matched agains secret names, follows RE2 syntax")
-	region := flag.String("region", "", "From which region the secrets should be copied")
-	source := flag.String("source", "source", "Source aws account, from each the secrets will be copied, default to `source`")
-	syncOperation := flag.String("syncOperation", "cr", "Sync operation that will be done it can be either: 'c' for create 'r' to replace and 'cr' for both operations")
-	target := flag.String("target", "target", "Target account where it is going to be copied")
-
-	flag.Parse()
-
-	matchRegex, err := regexp.Compile(*match)
-
-	if *region == "" {
-		util.Logger.Fatal().Msg("Region must be provided!")
-	}
-
-	if err != nil {
-		util.Logger.Fatal().Msgf("Unable to compile RegExp: '%s'", *match)
-	}
-
-	if _, exists := SyncOperations[*syncOperation]; !exists {
-		util.Logger.Fatal().Msg("Sync operation doesn't exists, use one of the followings: 'c' for create 'r' to replace and 'cr' for both operations")
-	}
-
-	options := Options{
-		CredentialsFile: *credentialsFile,
-		LogLevel:        *logLevel,
-		Match:           *matchRegex,
-		Region:          *region,
-		Source:          *source,
-		SyncOperation:   SyncOperations[*syncOperation],
-		Target:          *target,
-	}
-
-	util.InitLog(options.LogLevel)
-
-	util.Logger.Debug().Any("options", options).Send()
-
-	return options
 }
