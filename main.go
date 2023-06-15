@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"regexp"
+
+	"augustomelo/sync-aws-acc-secrets/util"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -16,6 +16,7 @@ import (
 
 type Options struct {
 	CredentialsFile string
+	LogLevel        string
 	Match           regexp.Regexp
 	Region          string
 	Source          string
@@ -59,16 +60,13 @@ func main() {
 	secrets := RetrieveSecrets(sourceCfg, secretsARNs)
 	report := SyncSecrets(targetCfg, secrets, options.SyncOperation)
 
-	displayReport(report)
+	DisplayReport(report)
 }
 
-func displayReport(report Report) {
-	log.Println("Secrets created on target: ")
-	log.Println(report.Created)
-	log.Println("Secrets replaced on target: ")
-	log.Println(report.Replaced)
-	log.Println("Secrets skipped on the target: ")
-	log.Println(report.Skipped)
+func DisplayReport(report Report) {
+	util.Logger.Info().Strs("created", report.Created).Send()
+	util.Logger.Info().Strs("replaced", report.Replaced).Send()
+	util.Logger.Info().Strs("skipped", report.Skipped).Send()
 }
 
 func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutput, syncOperation SyncOperation) Report {
@@ -80,7 +78,7 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 	}
 
 	for _, secret := range secrets {
-		log.Printf("Synching secret: `%s`", *secret.ARN)
+		util.Logger.Debug().Msgf("Synching secret: `%s`", *secret.ARN)
 
 		secretARN := SecretExistsOnTarget(conn, secret.Name)
 
@@ -92,10 +90,10 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 			})
 
 			if err != nil {
-				log.Panicf("Error: %s", err)
+				util.Logger.Error().Msgf("Error: %s", err)
 			}
 
-			log.Printf("Created secret, new ARN: `%s`", *result.ARN)
+			util.Logger.Debug().Msgf("Created secret, new ARN: `%s`", *result.ARN)
 			report.Created = append(report.Created, *secret.ARN)
 		} else if (syncOperation == Replace || syncOperation == CreateReplace) && secretARN != "" {
 			result, err := conn.UpdateSecret(context.TODO(), &secretsmanager.UpdateSecretInput{
@@ -105,10 +103,10 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 			})
 
 			if err != nil {
-				log.Panicf("Error: %s", err)
+				util.Logger.Error().Msgf("Error: %s", err)
 			}
 
-			log.Printf("Replaced secret content, ARN: `%s`", *result.ARN)
+			util.Logger.Debug().Msgf("Replaced secret content, ARN: `%s`", *result.ARN)
 			report.Replaced = append(report.Replaced, *result.ARN)
 		} else {
 			report.Skipped = append(report.Skipped, fmt.Sprintf("%s: Unable to create/replace secret due to sync operation being '%s'", *secret.ARN, syncOperation))
@@ -126,7 +124,7 @@ func SecretExistsOnTarget(conn *secretsmanager.Client, secretName *string) strin
 	})
 
 	if err != nil {
-		log.Panicf("Error: %s", err)
+		util.Logger.Error().Msgf("Error: %s", err)
 	}
 
 	if val != nil {
@@ -150,13 +148,13 @@ func RetrieveSecrets(config aws.Config, secretsARNs []string) []*secretsmanager.
 		})
 
 		if err != nil {
-			log.Panicf("Error while getting secret value for ARN: '%s' error: \n%s", arn, err)
+			util.Logger.Error().Msgf("Error while getting secret value for ARN: '%s' error: %s", arn, err)
 		}
 
 		secrets = append(secrets, result)
 	}
 
-	log.Printf("Found `%d` secret value", len(secrets))
+	util.Logger.Info().Int("totalSecrets", len(secrets)).Send()
 	return secrets
 }
 
@@ -167,23 +165,24 @@ func RetrieveSecretsARNs(config aws.Config, match regexp.Regexp) []string {
 	page, err := conn.ListSecrets(context.TODO(), filterSecretList)
 
 	if err != nil {
-		log.Printf("Error: '%s", err)
+		util.Logger.Error().Msgf("Error: '%s", err)
 		return secretsARNs
 	}
 
 	for i := 1; ; i++ {
-		log.Printf("Procesing page %d with %d items", i, len(page.SecretList))
+		util.Logger.Debug().Msgf("Procesing page %d with %d items", i, len(page.SecretList))
 
 		for _, secret := range page.SecretList {
-			log.Printf("Processing secret: %s", *secret.Name)
+			util.Logger.Debug().Msgf("Processing secret: %s", *secret.Name)
+
 			if match.MatchString(*secret.Name) {
-				log.Printf("Matched secret name: `%s` against: `%s`", *secret.Name, &match)
+				util.Logger.Debug().Msgf("Matched secret name: `%s` against: `%s`", *secret.Name, &match)
 				secretsARNs = append(secretsARNs, *secret.ARN)
 			}
 		}
 
 		if page.NextToken == nil {
-			log.Printf("No NextToken povided, processed last page")
+			util.Logger.Debug().Msgf("No NextToken povided, processed last page")
 			break
 		}
 
@@ -191,14 +190,14 @@ func RetrieveSecretsARNs(config aws.Config, match regexp.Regexp) []string {
 		page, err = conn.ListSecrets(context.TODO(), filterSecretList)
 
 		if err != nil {
-			log.Printf("Error: '%s", err)
+			util.Logger.Error().Msgf("Error: '%s", err)
 			return secretsARNs
 		}
 
 	}
 
-	log.Printf("Found total secrets: %d", len(secretsARNs))
-	log.Printf("Found secrets: %s", secretsARNs)
+	util.Logger.Info().Int("totalSecretsARNs", len(secretsARNs)).Send()
+	util.Logger.Debug().Strs("secretsARNs", secretsARNs).Send()
 
 	return secretsARNs
 }
@@ -211,7 +210,7 @@ func LoadConfig(profile string, options Options) aws.Config {
 	)
 
 	if err != nil {
-		log.Panic("Cloudn't load config!", err)
+		util.Logger.Fatal().Msgf("Cloudn't load config!", err)
 	}
 
 	return cfg
@@ -219,30 +218,32 @@ func LoadConfig(profile string, options Options) aws.Config {
 
 func InitOptions() Options {
 	credentialsFile := flag.String("credentialsFile", "", "Credentials file locaiton, if no value is provided it will search on aws default location")
+	logLevel := flag.String("logLevel", "info", "Log level, possible values: trace, debug, info, warn, error, panic and disabled")
 	match := flag.String("match", "", "Regex that will be matched agains secret names, follows RE2 syntax")
 	region := flag.String("region", "", "From which region the secrets should be copied")
 	source := flag.String("source", "source", "Source aws account, from each the secrets will be copied, default to `source`")
-	target := flag.String("target", "target", "Target account where it is going to be copied")
 	syncOperation := flag.String("syncOperation", "cr", "Sync operation that will be done it can be either: 'c' for create 'r' to replace and 'cr' for both operations")
+	target := flag.String("target", "target", "Target account where it is going to be copied")
 
 	flag.Parse()
 
 	matchRegex, err := regexp.Compile(*match)
 
 	if *region == "" {
-		log.Panic("Region must be provided")
+		util.Logger.Fatal().Msg("Region must be provided!")
 	}
 
 	if err != nil {
-		log.Panicf("Unable to compile RegExp: '%s'", *match)
+		util.Logger.Fatal().Msgf("Unable to compile RegExp: '%s'", *match)
 	}
 
 	if _, exists := SyncOperations[*syncOperation]; !exists {
-		log.Panicf("Sync operation doesn't exists, use one of the followings: 'c' for create 'r' to replace and 'cr' for both operations")
+		util.Logger.Fatal().Msg("Sync operation doesn't exists, use one of the followings: 'c' for create 'r' to replace and 'cr' for both operations")
 	}
 
-  options := Options{
+	options := Options{
 		CredentialsFile: *credentialsFile,
+		LogLevel:        *logLevel,
 		Match:           *matchRegex,
 		Region:          *region,
 		Source:          *source,
@@ -250,8 +251,9 @@ func InitOptions() Options {
 		Target:          *target,
 	}
 
-  result, _ := json.Marshal(options)
-  log.Printf("Initialized with option: %s", result)
+	util.InitLog(options.LogLevel)
 
-  return options
+	util.Logger.Debug().Any("options", options).Send()
+
+	return options
 }
