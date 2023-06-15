@@ -19,16 +19,7 @@ type Report struct {
 	Skipped  []string
 }
 
-
-// usage example
-// syn-aws-acc-secrets --source=source-profile --target=profile1 --match=regex --region=eu-central-1 --credentialsFile=/location --syncOperation=cr
-
 func main() {
-	// Possibel impprovements
-	// 0. Better logging: https://github.com/rs/zerolog
-	// 1. Better desciption on the secret it should be something like: Created by sync-aws-acc-secrets version: 12313, secret ref: arn
-	// 2. Use context to geep the connections
-
 	options := util.InitOptions()
 	sourceCfg := LoadConfig(options.Source, options)
 	targetCfg := LoadConfig(options.Target, options)
