@@ -30,13 +30,13 @@ var SyncOperations = map[string]SyncOperation{
 }
 
 func InitOptions() Options {
-	credentialsFile := flag.String("credentialsFile", "", "Credentials file locaiton, if no value is provided it will search on aws default location")
+	credentialsFile := flag.String("credentialsFile", "", "Credentials AWS CLI file locaiton (https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html), if no value is provided it will search on AWS default location")
 	logLevel := flag.String("logLevel", "info", "Log level, possible values: trace, debug, info, warn, error, panic and disabled")
-	match := flag.String("match", "", "Regex that will be matched agains secret names, follows RE2 syntax")
+	match := flag.String("match", "", "Regex that will be matched agains secret names, follows RE2 syntax (https://github.com/google/re2/wiki/Syntax)")
 	region := flag.String("region", "", "From which region the secrets should be copied")
-	source := flag.String("source", "source", "Source aws account, from each the secrets will be copied, default to `source`")
-	syncOperation := flag.String("syncOperation", "cr", "Sync operation that will be done it can be either: 'c' for create 'r' to replace and 'cr' for both operations")
-	target := flag.String("target", "target", "Target account where it is going to be copied")
+	source := flag.String("source", "source", "Source AWS account, from each the secrets will be copied, default to `source`")
+	syncOperation := flag.String("syncOperation", "cr", "Sync operation that will be done it can be either: 'c' to ONLY create 'r' to ONLY replace and 'cr' for both operations")
+	target := flag.String("target", "target", "Target AWS account where the secrets will be copied")
 
 	flag.Parse()
 
