@@ -10,6 +10,7 @@ type Options struct {
 	LogLevel        string
 	Match           regexp.Regexp
 	Region          string
+	IsToRename      bool
 	Source          string
 	SyncOperation   SyncOperation
 	Target          string
@@ -34,6 +35,7 @@ func InitOptions() Options {
 	logLevel := flag.String("logLevel", "info", "Log level, possible values: trace, debug, info, warn, error, panic and disabled")
 	match := flag.String("match", "", "Regex that will be matched agains secret names, follows RE2 syntax (https://github.com/google/re2/wiki/Syntax)")
 	region := flag.String("region", "", "From which region the secrets should be copied")
+	rename := flag.Bool("rename", false, "If true when creating a secret you will be prompted the new name to be provided. Only works for the creation since it isn't allowd to change a secret name neither the ARN.")
 	source := flag.String("source", "source", "Source AWS account, from each the secrets will be copied, default to `source`")
 	syncOperation := flag.String("syncOperation", "cr", "Sync operation that will be done it can be either: 'c' to ONLY create 'r' to ONLY replace and 'cr' for both operations")
 	target := flag.String("target", "target", "Target AWS account where the secrets will be copied")
@@ -59,6 +61,7 @@ func InitOptions() Options {
 		LogLevel:        *logLevel,
 		Match:           *matchRegex,
 		Region:          *region,
+		IsToRename:      *rename,
 		Source:          *source,
 		SyncOperation:   SyncOperations[*syncOperation],
 		Target:          *target,

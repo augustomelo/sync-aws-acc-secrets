@@ -14,6 +14,8 @@ Possible flags
         Regex that will be matched agains secret names, follows RE2 syntax (https://github.com/google/re2/wiki/Syntax)
   -region string
         From which region the secrets should be copied
+  -rename
+        If true when creating a secret you will be prompted the new name to be provided. Only works for the creation since it isn't allowd to change a secret name neither the ARN.
   -source source
         Source AWS account, from each the secrets will be copied, default to source (default "source")
   -syncOperation string

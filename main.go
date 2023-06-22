@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 
 	"augustomelo/sync-aws-acc-secrets/util"
@@ -25,7 +27,7 @@ func main() {
 	targetCfg := LoadConfig(options.Target, options)
 	secretsARNs := RetrieveSecretsARNs(sourceCfg, options.Match)
 	secrets := RetrieveSecrets(sourceCfg, secretsARNs)
-	report := SyncSecrets(targetCfg, secrets, options.SyncOperation)
+	report := SyncSecrets(targetCfg, secrets, options)
 
 	DisplayReport(report)
 }
@@ -36,7 +38,7 @@ func DisplayReport(report Report) {
 	util.Logger.Info().Strs("skipped", report.Skipped).Send()
 }
 
-func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutput, syncOperation util.SyncOperation) Report {
+func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutput, options util.Options) Report {
 	conn := secretsmanager.NewFromConfig(config)
 	report := Report{
 		Created:  make([]string, 0),
@@ -49,9 +51,23 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 
 		secretARN := SecretExistsOnTarget(conn, secret.Name)
 
-		if (syncOperation == util.Create || syncOperation == util.CreateReplace) && secretARN == "" {
+		if (options.SyncOperation == util.Create || options.SyncOperation == util.CreateReplace) && secretARN == "" {
+      secretName := *secret.Name
+
+      if options.IsToRename {
+        fmt.Printf("Should the secret `%s` be renamed to: \n", secretName)
+
+        userInput := readNewSecretFromStdin()
+
+        util.Logger.Debug().Msgf("Read from the input: `%s`", userInput)
+        if len(userInput) > 0 {
+          util.Logger.Info().Str("newSecretName", userInput).Send()
+          secretName = userInput
+        }
+      }
+
 			result, err := conn.CreateSecret(context.TODO(), &secretsmanager.CreateSecretInput{
-				Name:         secret.Name,
+				Name:         aws.String(secretName),
 				Description:  aws.String(fmt.Sprintf("Ref: %s", *secret.ARN)),
 				SecretString: secret.SecretString,
 			})
@@ -61,8 +77,8 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 			}
 
 			util.Logger.Debug().Msgf("Created secret, new ARN: `%s`", *result.ARN)
-			report.Created = append(report.Created, *secret.ARN)
-		} else if (syncOperation == util.Replace || syncOperation == util.CreateReplace) && secretARN != "" {
+			report.Created = append(report.Created, *result.ARN)
+		} else if (options.SyncOperation == util.Replace || options.SyncOperation == util.CreateReplace) && secretARN != "" {
 			result, err := conn.UpdateSecret(context.TODO(), &secretsmanager.UpdateSecretInput{
 				SecretId:     &secretARN,
 				Description:  aws.String(fmt.Sprintf("Ref: %s", *secret.ARN)),
@@ -76,11 +92,23 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 			util.Logger.Debug().Msgf("Replaced secret content, ARN: `%s`", *result.ARN)
 			report.Replaced = append(report.Replaced, *result.ARN)
 		} else {
-			report.Skipped = append(report.Skipped, fmt.Sprintf("%s: Unable to create/replace secret due to sync operation being '%s'", *secret.ARN, syncOperation))
+			report.Skipped = append(report.Skipped, fmt.Sprintf("%s: Unable to create/replace secret due to sync operation being '%s'", *secret.ARN, options.SyncOperation))
 		}
 	}
 
 	return report
+}
+
+func readNewSecretFromStdin() string {
+    scanner := bufio.NewScanner(os.Stdin)
+    scanner.Scan()
+    err := scanner.Err()
+
+    if err != nil {
+      util.Logger.Error().Msgf("Error: %s", err)
+    }
+
+    return scanner.Text()
 }
 
 func SecretExistsOnTarget(conn *secretsmanager.Client, secretName *string) string {
