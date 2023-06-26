@@ -52,24 +52,25 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 		secretARN := SecretExistsOnTarget(conn, secret.Name)
 
 		if (options.SyncOperation == util.Create || options.SyncOperation == util.CreateReplace) && secretARN == "" {
-      secretName := *secret.Name
+			secretName := *secret.Name
 
-      if options.IsToRename {
-        fmt.Printf("Should the secret `%s` be renamed to: \n", secretName)
+			if options.IsToRename {
+				fmt.Printf("Should the secret `%s` be renamed to: \n", secretName)
 
-        userInput := readNewSecretFromStdin()
+				userInput := readNewSecretFromStdin()
 
-        util.Logger.Debug().Msgf("Read from the input: `%s`", userInput)
-        if len(userInput) > 0 {
-          util.Logger.Info().Str("newSecretName", userInput).Send()
-          secretName = userInput
-        }
-      }
+				util.Logger.Debug().Msgf("Read from the input: `%s`", userInput)
+				if len(userInput) > 0 {
+					util.Logger.Info().Str("newSecretName", userInput).Send()
+					secretName = userInput
+				}
+			}
 
 			result, err := conn.CreateSecret(context.TODO(), &secretsmanager.CreateSecretInput{
 				Name:         aws.String(secretName),
 				Description:  aws.String(fmt.Sprintf("Ref: %s", *secret.ARN)),
 				SecretString: secret.SecretString,
+				SecretBinary: secret.SecretBinary,
 			})
 
 			if err != nil {
@@ -83,6 +84,7 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 				SecretId:     &secretARN,
 				Description:  aws.String(fmt.Sprintf("Ref: %s", *secret.ARN)),
 				SecretString: secret.SecretString,
+				SecretBinary: secret.SecretBinary,
 			})
 
 			if err != nil {
@@ -100,15 +102,15 @@ func SyncSecrets(config aws.Config, secrets []*secretsmanager.GetSecretValueOutp
 }
 
 func readNewSecretFromStdin() string {
-    scanner := bufio.NewScanner(os.Stdin)
-    scanner.Scan()
-    err := scanner.Err()
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	err := scanner.Err()
 
-    if err != nil {
-      util.Logger.Error().Msgf("Error: %s", err)
-    }
+	if err != nil {
+		util.Logger.Error().Msgf("Error: %s", err)
+	}
 
-    return scanner.Text()
+	return scanner.Text()
 }
 
 func SecretExistsOnTarget(conn *secretsmanager.Client, secretName *string) string {
