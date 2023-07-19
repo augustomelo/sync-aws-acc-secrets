@@ -31,7 +31,7 @@ var SyncOperations = map[string]SyncOperation{
 }
 
 func InitOptions() Options {
-	credentialsFile := flag.String("credentialsFile", "", "Credentials AWS CLI file locaiton (https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html), if no value is provided it will search on AWS default location")
+	credentialsFile := flag.String("credentialsFile", "", "Credentials AWS CLI file locaiton (https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)")
 	logLevel := flag.String("logLevel", "info", "Log level, possible values: trace, debug, info, warn, error, panic and disabled")
 	match := flag.String("match", "", "Regex that will be matched agains secret names, follows RE2 syntax (https://github.com/google/re2/wiki/Syntax)")
 	region := flag.String("region", "", "From which region the secrets should be copied")
@@ -43,6 +43,10 @@ func InitOptions() Options {
 	flag.Parse()
 
 	matchRegex, err := regexp.Compile(*match)
+
+	if *credentialsFile == "" {
+		Logger.Fatal().Msg("Credentials file location must be provided!")
+	}
 
 	if *region == "" {
 		Logger.Fatal().Msg("Region must be provided!")

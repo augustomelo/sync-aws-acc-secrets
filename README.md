@@ -36,7 +36,7 @@ With the default log level (info) the expected output is something like this:
 
 ## Running
 
-Example: `./sync-aws-acc-secrets -region=sa-east-1`
+Example: `./sync-aws-acc-secrets -credentialsFile=/home/user/leet/credentials -region=sa-east-1`
 
 With that it will load the credentials (source and target profiles) stored on
 home directory ([default location](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)) and it will either create or replace the secrets on the target profile

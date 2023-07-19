@@ -207,7 +207,7 @@ func LoadConfig(profile string, options util.Options) aws.Config {
 	)
 
 	if err != nil {
-		util.Logger.Fatal().Msgf("Cloudn't load config!", err)
+		util.Logger.Fatal().Msgf("Cloudn't load config: %s", err)
 	}
 
 	return cfg
