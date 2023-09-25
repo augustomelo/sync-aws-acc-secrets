@@ -1,12 +1,12 @@
-module augustomelo/sync-aws-acc-secrets
+module github.com/augustomelo/sync-aws-acc-secrets
 
-go 1.20
+go 1.21
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.18.0
 	github.com/aws/aws-sdk-go-v2/config v1.18.25
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.19.8
-	github.com/rs/zerolog v1.29.1 // indirect
+	github.com/rs/zerolog v1.29.1
 )
 
 require (
